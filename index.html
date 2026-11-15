@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PrismDesk — Deterministic Spatial CAD, AGMA Stress & BOM Workbench</title>
+  <style>
+    :root {
+      --bg-glass: rgba(8, 13, 26, 0.86);
+      --border-cyan: rgba(56, 189, 248, 0.38);
+      --accent-cyan: #38bdf8;
+      --accent-amber: #f59e0b;
+      --accent-crimson: #f43f5e;
+      --accent-emerald: #10b981;
+      --text-main: #f8fafc;
+      --text-dim: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      overflow: hidden;
+      background: #050811;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: var(--text-main);
+    }
+    #canvas-container { position: fixed; inset: 0; z-index: 1; }
+    #webcam-bg {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: 0;
+      display: none;
+      filter: contrast(1.05) brightness(0.85);
+    }
+    .hud-top {
+      position: fixed;
+      top: 12px;
+      left: 14px;
+      right: 14px;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      pointer-events: none;
+      flex-wrap: wrap;
+    }
+    .brand-pill {
+      pointer-events: auto;
+      background: var(--bg-glass);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-cyan);
+      border-radius: 12px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+    .brand-title {
+      font-weight: 800;
+      font-size: 1.02rem;
+      letter-spacing: 0.04em;
+      background: linear-gradient(90deg, #38bdf8, #a855f7, #f43f5e);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .badge {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 3px 7px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+    .status-strip {
+      pointer-events: auto;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      background: var(--bg-glass);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255,255,255,0.14);
+      padding: 8px 14px;
+      border-radius: 12px;
+      font-size: 0.78rem;
+    }
+    .metric { display: flex; align-items: center; gap: 5px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-emerald); box-shadow: 0 0 8px var(--accent-emerald); }
+    .dot.warn { background: var(--accent-crimson); box-shadow: 0 0 10px var(--accent-crimson); }
+
+    #gesture-prompt {
+      position: fixed;
+      top: 68px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--border-cyan);
+      border-radius: 999px;
+      padding: 7px 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.45);
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    /* Left Physics & Candidate Rejection Audit Panel */
+    #audit-drawer {
+      position: fixed;
+      top: 112px;
+      left: 14px;
+      width: 310px;
+      z-index: 10;
+      background: var(--bg-glass);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(56, 189, 248, 0.28);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 0.74rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .drawer-title {
+      font-weight: 700;
+      color: var(--accent-cyan);
+      font-size: 0.76rem;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .formula-box {
+      background: rgba(2, 6, 23, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 8px;
+      padding: 7px 9px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.69rem;
+      color: #cbd5e1;
+      margin-bottom: 8px;
+      line-height: 1.45;
+    }
+    .audit-item {
+      padding: 5px 7px;
+      border-radius: 6px;
+      margin-bottom: 4px;
+      background: rgba(15, 23, 42, 0.65);
+      border-left: 3px solid #64748b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .audit-item.reject { border-left-color: var(--accent-crimson); color: #fda4af; }
+    .audit-item.pass { border-left-color: var(--accent-emerald); color: #6ee7b7; background: rgba(16, 185, 129, 0.12); font-weight: 700; }
+
+    #glasses-fov {
+      position: fixed;
+      inset: 9vh 14vw;
+      border: 2px dashed rgba(56, 189, 248, 0.55);
+      border-radius: 28px;
+      z-index: 5;
+      pointer-events: none;
+      display: none;
+      box-shadow: 0 0 0 9999px rgba(2, 6, 23, 0.52);
+    }
+    #glasses-fov::after {
+      content: "META VR GLASSES CENTRAL FoV SAFE ZONE (70 x 66) - GAZE + LAP PINCH ACTIVE";
+      position: absolute;
+      top: -26px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      color: var(--accent-cyan);
+      background: rgba(2, 6, 23, 0.9);
+      padding: 3px 10px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    .hud-bottom {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 14px;
+      padding: 9px 12px;
+      max-width: 98vw;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.65);
+    }
+    button, .slider-box {
+      background: rgba(30, 41, 59, 0.88);
+      color: var(--text-main);
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 9px;
+      padding: 7px 10px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.16s ease;
+    }
+    button:hover {
+      border-color: var(--accent-cyan);
+      background: rgba(56, 189, 248, 0.18);
+      transform: translateY(-1px);
+    }
+    button.active {
+      background: rgba(56, 189, 248, 0.26);
+      border-color: var(--accent-cyan);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+    }
+    button.primary-vr { background: linear-gradient(135deg, #0284c7, #7c3aed); border-color: #38bdf8; }
+    button.demo-btn { background: linear-gradient(135deg, #059669, #0d9488); border-color: #34d399; }
+    .slider-box input[type="range"] { width: 78px; accent-color: var(--accent-cyan); cursor: pointer; }
+  </style>
+</head>
+<body>
+  <video id="webcam-bg" autoplay playsinline muted></video>
+  <div id="canvas-container"></div>
+  <div id="glasses-fov"></div>
+
+  <!-- Top Telemetry Header -->
+  <div class="hud-top">
+    <div class="brand-pill">
+      <div>
+        <div class="brand-title">PRISMDESK</div>
+        <div style="font-size:0.68rem;color:var(--text-dim);">ISO 6336 Spatial CAD Teardown &amp; Deterministic BOM Engine</div>
+      </div>
+      <span class="badge">IWSDK / WebXR</span>
+      <span class="badge" id="ratio-badge">Ratio 3.00:1</span>
+    </div>
+
+    <div class="status-strip">
+      <div class="metric">
+        <span class="dot warn" id="health-dot"></span>
+        <span id="health-text">CRIT OVERLOAD: PLANET GEAR B (SF 0.81)</span>
+      </div>
+      <span style="color:rgba(255,255,255,0.2)">|</span>
+      <div class="metric">
+        <span style="color:var(--text-dim)">PEAK STRESS:</span>
+        <strong id="peak-stress" style="color:var(--accent-crimson)">512 MPa</strong>
+      </div>
+      <span style="color:rgba(255,255,255,0.2)">|</span>
+      <div class="metric">
+        <span style="color:var(--text-dim)">MASS:</span>
+        <strong id="bom-mass">4.82 kg</strong>
+      </div>
+      <span style="color:rgba(255,255,255,0.2)">|</span>
+      <div class="metric">
+        <span style="color:var(--text-dim)">BOM COST:</span>
+        <strong id="bom-cost" style="color:var(--accent-cyan)">$312.00</strong>
+      </div>
+    </div>
+  </div>
+
+  <div id="gesture-prompt">
+    Hands-First Spatial CAD: Spread hands to explode - Click/Drag any 3D gear to inspect live AGMA stress or drop to Desk Tray
+  </div>
+
+  <!-- Deterministic Physics & Candidate Rejection Audit Drawer -->
+  <!-- Initial values below are the solver's own output at 420 Nm / 1800 RPM
+       (verified by unit test); the solver overwrites them on load. -->
+  <div id="audit-drawer">
+    <div class="drawer-title">
+      <span>DETERMINISTIC AGMA SOLVER</span>
+      <span id="active-part-tag" style="color:#f8fafc">PG-03B (64mm)</span>
+    </div>
+    <div class="formula-box" id="physics-readout">
+      Ft = 2.T / d = 4,463 N @ 420 Nm<br/>
+      sigma_b (Lewis) = 511.8 MPa (Yield: 415 MPa)<br/>
+      Safety Factor (SF) = 0.81x [FAIL &lt; 1.50]<br/>
+      Mesh Temp = 118.0C | Wear = -0.42mm
+    </div>
+    <div class="drawer-title" style="margin-top:6px;">
+      <span>CANDIDATE ALLOY AUDIT TRAIL</span>
+      <span style="color:var(--text-dim)">Budget &le; $95</span>
+    </div>
+    <div id="candidate-audit-list"></div>
+  </div>
+
+  <!-- Bottom Interactive Control & Emulator Dock -->
+  <div class="hud-bottom">
+    <button class="primary-vr" id="btn-xr">Enter Quest MR</button>
+    <button class="demo-btn" id="btn-tour">Guided Tour</button>
+    <button id="btn-tour-prev">Prev Step</button>
+    <button id="btn-tour-next">Next Step</button>
+
+    <div class="slider-box" title="Bimanual Hand Spread Distance">
+      <span>Explode:</span>
+      <input type="range" id="slider-explode" min="0" max="100" value="0" />
+      <span id="explode-val">0%</span>
+    </div>
+
+    <div class="slider-box" title="Input Drive Torque (Nm) - Drives Live AGMA Stress">
+      <span>Torque:</span>
+      <input type="range" id="slider-torque" min="80" max="600" value="420" />
+      <span id="torque-val">420 Nm</span>
+    </div>
+
+    <div class="slider-box" title="Input Shaft Speed (RPM) - Drives Friction Thermal Load">
+      <span>RPM:</span>
+      <input type="range" id="slider-rpm" min="300" max="3600" value="1800" />
+      <span id="rpm-val">1800</span>
+    </div>
+
+    <button id="btn-prism">Stress Color Map</button>
+    <button id="btn-caliper">Finger Caliper</button>
+    <button id="btn-quarantine">Drop Faulty to Tray</button>
+    <button id="btn-replace">Auto-Select Winner Alloy</button>
+    <button id="btn-export">Export Audit JSON</button>
+    <button id="btn-fov">Glasses FoV</button>
+    <button id="btn-contrast">Accessible + Voice</button>
+    <button id="btn-passthrough">Desk Cam (2D only)</button>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
