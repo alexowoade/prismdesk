@@ -1,4 +1,4 @@
-# PrismDesk (v8.9.5) — The Worn-Gear Doctor
+# PrismDesk — The Worn-Gear Doctor
 
 **A hands-first, multimodal WebXR workbench that diagnoses planetary gearbox failure in real time and autonomously triages the alloy that fixes it.**
 
@@ -74,15 +74,3 @@ npm run build
 ```
 
 Drag the `dist/` folder onto the Netlify site deploys page.
-
----
-
-## Corrections vs. the pasted review draft (verified against v8.9.5 main.js)
-
-* `6061-T6` unit cost is **$24.00** in `ALLOY_CANDIDATES`, not $28.00.
-* `17-4PH` unit cost is **$64.00** in `ALLOY_CANDIDATES`, not $78.00.
-* High-load video row corrected to the verified final frame: **460 Nm / 1900 RPM, assembly peak 401 MPa, min SF 2.19x** (the draft's 440 Nm / 376.4 MPa / 2.28x is not in the code or the final frame).
-* Worn-titanium temperature and high-load temperature left as "—" (not in the code as literals; do not invent).
-* Debounce stated without a millisecond number (no `debounce` / `220ms` literal in main.js).
-* "Havok physics" removed (the app uses deterministic Three.js kinematics + ISO 6336 / AGMA Lewis solver; Havok is not installed).
-* "No controller ever, hand tracking only" removed (the app is tri-modal: hands-first + gaze-dwell + 6DoF controllers).
